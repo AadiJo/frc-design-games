@@ -1,0 +1,593 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FRC Design Jeopardy</title>
+<style>
+  :root {
+    --bg: #05070f;
+    --board: #0b1a5c;
+    --tile: #1230a8;
+    --tile-hi: #1a3fd1;
+    --gold: #ffcc33;
+    --text: #ffffff;
+    --muted: #9aa6d6;
+    --good: #2ecc71;
+    --bad: #ff5a5a;
+    --panel: #0e1430;
+    --line: #26306a;
+    font-family: "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); }
+  button { font: inherit; cursor: pointer; border: 0; border-radius: 10px; }
+  input { font: inherit; }
+  .hidden { display: none !important; }
+
+  /* ---------- setup screen ---------- */
+  #setup { min-height: 100%; display: grid; place-items: center; padding: 32px; }
+  .setup-card { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 36px 40px; width: min(640px, 100%); }
+  .setup-card h1 { margin: 0 0 4px; font-size: 40px; letter-spacing: 1px; }
+  .setup-card h1 span { color: var(--gold); }
+  .setup-card p { color: var(--muted); margin: 0 0 24px; }
+  .team-row { display: flex; gap: 10px; margin-bottom: 10px; }
+  .team-row input { flex: 1; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--line); background: #070b1f; color: var(--text); font-size: 18px; }
+  .team-row button { background: #2a2f52; color: var(--muted); padding: 0 14px; }
+  .setup-actions { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
+  .btn { padding: 12px 20px; font-weight: 700; font-size: 16px; }
+  .btn-gold { background: var(--gold); color: #1a1400; }
+  .btn-ghost { background: #1c2350; color: var(--text); }
+  .btn-good { background: var(--good); color: #032611; }
+  .btn-bad { background: var(--bad); color: #2b0000; }
+  .help { margin-top: 22px; font-size: 14px; color: var(--muted); line-height: 1.6; }
+  kbd { background: #1c2350; border: 1px solid var(--line); border-radius: 5px; padding: 1px 6px; font-size: 12px; color: var(--text); }
+
+  /* ---------- game layout ---------- */
+  #game { height: 100%; display: grid; grid-template-rows: auto 1fr auto; }
+  .topbar { display: flex; align-items: center; justify-content: space-between; padding: 10px 18px; gap: 12px; }
+  .topbar .title { font-weight: 800; font-size: 22px; letter-spacing: 1px; }
+  .topbar .title span { color: var(--gold); }
+  .topbar .tools { display: flex; gap: 8px; flex-wrap: wrap; }
+  .topbar .tools button { background: #1c2350; color: var(--text); padding: 8px 14px; font-size: 14px; }
+
+  .board { display: grid; grid-template-columns: repeat(5, 1fr); grid-template-rows: auto repeat(5, 1fr); gap: 8px; padding: 8px 18px 14px; min-height: 0; }
+  .cat { background: var(--board); border-radius: 10px; display: grid; place-items: center; text-align: center; padding: 14px 8px; font-weight: 800; font-size: clamp(14px, 1.6vw, 24px); text-transform: uppercase; letter-spacing: .5px; line-height: 1.15; }
+  .tile { background: var(--tile); color: var(--gold); font-weight: 900; font-size: clamp(26px, 4vw, 60px); border-radius: 10px; text-shadow: 2px 3px 0 #000a; transition: background .12s, transform .12s; }
+  .tile:hover { background: var(--tile-hi); transform: translateY(-2px); }
+  .tile.used { background: #0a1240; color: transparent; text-shadow: none; cursor: default; transform: none; }
+
+  .scores { display: flex; gap: 12px; padding: 0 18px 16px; }
+  .score { flex: 1; background: var(--panel); border: 2px solid var(--line); border-radius: 14px; padding: 10px 14px; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 6px; }
+  .score.control { border-color: var(--gold); }
+  .score .name { font-weight: 800; font-size: clamp(16px, 1.8vw, 26px); cursor: text; }
+  .score .ctl { font-size: 12px; color: var(--gold); font-weight: 700; letter-spacing: 1px; }
+  .score .pts { font-weight: 900; font-size: clamp(26px, 3.2vw, 48px); text-align: right; font-variant-numeric: tabular-nums; }
+  .score .pts.neg { color: var(--bad); }
+  .score .adj { grid-column: 1 / -1; display: flex; gap: 6px; }
+  .score .adj button { flex: 1; background: #1c2350; color: var(--muted); padding: 6px 0; font-size: 13px; font-weight: 700; }
+
+  /* ---------- clue overlay ---------- */
+  .overlay { position: fixed; inset: 0; background: var(--board); display: grid; grid-template-rows: auto 1fr auto; z-index: 10; }
+  .ov-head { display: flex; justify-content: space-between; align-items: center; padding: 16px 24px; color: var(--muted); font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
+  .ov-head .val { color: var(--gold); font-size: 28px; font-weight: 900; }
+  .ov-body { display: grid; place-items: center; padding: 0 6vw; text-align: center; }
+  .clue-text { font-size: clamp(28px, 4.2vw, 64px); font-weight: 800; line-height: 1.2; text-shadow: 2px 3px 0 #0008; font-family: Georgia, "Times New Roman", serif; }
+  .answer-text { margin-top: 28px; font-size: clamp(22px, 3vw, 44px); color: var(--gold); font-weight: 800; }
+  .answer-note { margin-top: 10px; font-size: clamp(14px, 1.4vw, 20px); color: #cfd6ff; max-width: 900px; margin-inline: auto; line-height: 1.4; }
+  .dd-banner { font-size: clamp(48px, 9vw, 140px); font-weight: 900; color: var(--gold); text-shadow: 4px 6px 0 #000a; letter-spacing: 2px; }
+  .ov-foot { padding: 16px 24px 22px; display: flex; flex-direction: column; gap: 12px; align-items: center; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; align-items: center; }
+  .award { display: flex; align-items: center; gap: 6px; background: #0a1240; border-radius: 12px; padding: 6px 6px 6px 14px; }
+  .award .tn { font-weight: 800; margin-right: 6px; }
+  .award button { padding: 10px 14px; font-weight: 800; }
+  .award.done { opacity: .45; }
+  .timer { font-size: 28px; font-weight: 900; color: var(--gold); min-width: 64px; text-align: center; font-variant-numeric: tabular-nums; }
+  .timer.out { color: var(--bad); }
+  .wager-box { display: flex; gap: 8px; align-items: center; }
+  .wager-box input { width: 140px; padding: 10px 12px; border-radius: 10px; border: 0; font-size: 20px; font-weight: 800; text-align: center; }
+  .wager-box select { padding: 10px; border-radius: 10px; font-size: 18px; }
+  .final-grid { display: grid; gap: 10px; width: min(900px, 100%); }
+  .final-row { display: grid; grid-template-columns: 1fr 160px auto; gap: 10px; align-items: center; background: #0a1240; border-radius: 12px; padding: 10px 14px; }
+  .final-row input { padding: 10px; border-radius: 10px; border: 0; font-size: 18px; font-weight: 800; text-align: center; }
+  .final-row .fname { font-weight: 800; font-size: 20px; }
+  .muted { color: var(--muted); }
+
+  /* ---------- winner ---------- */
+  .winner { font-size: clamp(40px, 7vw, 110px); font-weight: 900; color: var(--gold); }
+  .standings { margin-top: 20px; font-size: clamp(18px, 2.2vw, 30px); line-height: 1.6; }
+</style>
+</head>
+<body>
+
+<!-- Setup: host names teams and starts the game -->
+<section id="setup">
+  <div class="setup-card">
+    <h1>FRC Design <span>Jeopardy</span></h1>
+    <p>Content: FRC Design Basics slides + FRC Design Handbook</p>
+    <div id="teamInputs"></div>
+    <div class="setup-actions">
+      <button class="btn btn-ghost" id="addTeam">+ Add team</button>
+      <button class="btn btn-gold" id="startBtn">Start game</button>
+      <button class="btn btn-ghost hidden" id="resumeBtn">Resume saved game</button>
+    </div>
+    <div class="help">
+      Click a dollar value to open a clue. Press <kbd>Space</kbd> to reveal the answer, then use
+      the ✓ / ✗ buttons to score each team. <kbd>T</kbd> starts a 30-second timer. <kbd>Esc</kbd> closes a clue.
+      Click a team name to rename it, and click a score card to give that team board control.
+      The game saves itself in this browser, so a refresh will not lose the scores.
+    </div>
+  </div>
+</section>
+
+<!-- Game board -->
+<section id="game" class="hidden">
+  <div class="topbar">
+    <div class="title">FRC DESIGN <span>JEOPARDY</span></div>
+    <div class="tools">
+      <button id="undoBtn" title="Undo last score change">↶ Undo</button>
+      <button id="finalBtn">Final Jeopardy</button>
+      <button id="newBtn">New game</button>
+    </div>
+  </div>
+  <div class="board" id="board"></div>
+  <div class="scores" id="scores"></div>
+</section>
+
+<!-- Clue / Daily Double / Final overlay -->
+<section class="overlay hidden" id="overlay"></section>
+
+<script>
+/*
+ * Game data. Each clue is written in Jeopardy style (the clue is the "answer");
+ * `a` is the correct response and `note` is the short explanation the host can read out.
+ */
+const CATEGORIES = [
+  {
+    name: "Box Tube & Materials",
+    clues: [
+      { q: "This aluminum alloy, with a \"-T6\" on the end, is the default choice for FRC plates and structure.", a: "What is 6061 (6061-T6)?", note: "7075 is the stronger alloy for higher loads. Many store-bought gears and hex shafts are 7075." },
+      { q: "This metal insert slides into the end of box tube so you can bolt tubes together with no gussets at all.", a: "What is a tube plug?", note: "Usually only 2 to 4 of the 8 bolt holes are needed." },
+      { q: "This plastic part fills the inside of a tube so its thin walls do not buckle when you tighten a bolt.", a: "What is a crush block?", note: "Easy to 3D print. Use 4 to 6 walls, and make it snug but not hammered in." },
+      { q: "Outer drivetrain frame tubes should be this wall thickness, not 1/16\", because of robot collisions.", a: "What is 1/8 inch?", note: "1/16\" is for gussets and bellypans. 1/4\" is for high-load pivots." },
+      { q: "This plastic is tougher and lighter than polycarbonate, is Loctite-safe, and costs about $250 a sheet.", a: "What is SRPP (self-reinforced polypropylene)?", note: "Polycarbonate is about $80 a sheet." },
+    ],
+  },
+  {
+    name: "Nuts & Bolts",
+    clues: [
+      { q: "This bolt size, read as \"number ten, thirty-two\", is used for most things on an FRC robot.", a: "What is #10-32?", note: "1/4\"-20 is for the high-strength structural connections." },
+      { q: "This nut has a nylon ring that grips the threads, and it is the first choice for keeping bolts tight.", a: "What is a nylock nut?", note: "No tools and no mess." },
+      { q: "Loctite 243, the general-purpose medium-strength threadlocker, is this color.", a: "What is blue?", note: "Purple 222 is low strength. Red 263 is high strength and usually needs heat to remove." },
+      { q: "You must countersink the hole before using this bolt, which sits flush with the surface.", a: "What is a flathead (FHCS, countersunk screw)?", note: "Forgetting to countersink is a classic mistake." },
+      { q: "Rivets are weak in shear and loosen with vibration, so any riveted structural joint needs at least one of these.", a: "What is a bolt?", note: "The bolt carries shear load and holds the joint if the rivets fail." },
+    ],
+  },
+  {
+    name: "Bearings & Axles",
+    clues: [
+      { q: "This is the most common bearing in FRC. Its lip sits against the plate it mounts in.", a: "What is a flanged bearing?", note: "" },
+      { q: "Gears and pulleys slide onto this six-sided axle profile and turn with it, with no keys or extra parts.", a: "What is hex (a hex axle)?", note: "Round axles need a key, but they are great for dead axles." },
+      { q: "This large bearing handles thrust loads, so you will find it in swerve modules and turrets.", a: "What is an X-contact bearing?", note: "Its balls touch at 4 points instead of 2, so it can hold the robot's weight." },
+      { q: "When an axle goes through two plates with flanged bearings, the flanges must face this direction.", a: "What is inward (toward each other)?", note: "If they face outward, the bearings slide in and the axle can walk out." },
+      { q: "On a flexible polycarbonate plate, you bolt on one of these so the bearing cannot pop out.", a: "What is a (retaining) hat?", note: "Hats can be bought or 3D printed." },
+    ],
+  },
+  {
+    name: "Slop Stoppers",
+    clues: [
+      { q: "This is the distance a part can move before it engages the next part. It makes pivots wobbly and inaccurate.", a: "What is backlash?", note: "Also called slop." },
+      { q: "Of chain, belts, and gears, this one has almost no backlash but is the weakest.", a: "What are belts?", note: "Best on rollers and elevators." },
+      { q: "This physical limit on travel gives a mechanism the same known zero every time.", a: "What is a hardstop?", note: "Add one wherever something rotates or slides." },
+      { q: "Paired with a magnet, this sensor makes a hardstop that never wears out.", a: "What is a Hall effect sensor?", note: "It is a non-mechanical hardstop for high-force mechanisms." },
+      { q: "Through-bore absolute encoders slide onto a shaft, so they only work on this kind of axle.", a: "What is a live axle (one that spins)?", note: "They do not work on dead axles, because a dead axle does not turn." },
+    ],
+  },
+  {
+    name: "Print It!",
+    clues: [
+      { q: "A 3D-printed part is weakest between these, so orient it so loads do not pull them apart.", a: "What are layers?", note: "Prints are strongest in the flat X-Y plane." },
+      { q: "When you need more strength, this filament is a big step up from PLA.", a: "What is PETG?", note: "" },
+      { q: "Horizontal holes print without supports if you give them this shape, with a 100-degree peak.", a: "What is a teardrop?", note: "" },
+      { q: "Holes print smaller than you draw them, so start with this much clearance, in millimeters.", a: "What is 0.1 to 0.5 mm?", note: "Print test holes to tune it for your printer. Accept any value in that range." },
+      { q: "Never 3D print these for high-torque jobs like motor pinions.", a: "What are gears?", note: "Printed gears wear out quickly under high torque." },
+    ],
+  },
+];
+
+const VALUES = [200, 400, 600, 800, 1000];
+
+const FINAL = {
+  category: "Material Mistakes",
+  q: "Keep Loctite away from this clear plastic. It makes it crack, even before the Loctite cures. Use Loctite 425 or Vibra-Tite VC-3 near it instead.",
+  a: "What is polycarbonate (Lexan)?",
+  note: "SRPP is Loctite-safe. Polycarbonate is not.",
+};
+
+const DAILY_DOUBLE_COUNT = 2;
+const TIMER_SECONDS = 30;
+const STORAGE_KEY = "frc-jeopardy-v1";
+
+/* ---------------- state ---------------- */
+// state = { teams: [{name, score}], used: ["c-r"], dd: ["c-r"], control: idx, history: [{team, delta}] }
+let state = null;
+
+function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+function load() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "null"); } catch { return null; }
+}
+
+// Daily Doubles go anywhere except the top ($200) row, in two different categories.
+function pickDailyDoubles() {
+  const cats = [...CATEGORIES.keys()].sort(() => Math.random() - 0.5).slice(0, DAILY_DOUBLE_COUNT);
+  return cats.map(c => `${c}-${1 + Math.floor(Math.random() * 4)}`);
+}
+
+/* ---------------- setup ---------------- */
+const teamInputs = document.getElementById("teamInputs");
+const defaultNames = ["Team 1", "Team 2"];
+
+function addTeamInput(value = "") {
+  if (teamInputs.children.length >= 4) return;
+  const row = document.createElement("div");
+  row.className = "team-row";
+  row.innerHTML = `<input maxlength="28" placeholder="Team ${teamInputs.children.length + 1} name">
+                   <button title="Remove">✕</button>`;
+  row.querySelector("input").value = value;
+  row.querySelector("button").onclick = () => { if (teamInputs.children.length > 2) row.remove(); };
+  teamInputs.appendChild(row);
+}
+defaultNames.forEach(() => addTeamInput());
+document.getElementById("addTeam").onclick = () => addTeamInput();
+
+document.getElementById("startBtn").onclick = () => {
+  const names = [...teamInputs.querySelectorAll("input")].map((i, n) => i.value.trim() || `Team ${n + 1}`);
+  state = { teams: names.map(name => ({ name, score: 0 })), used: [], dd: pickDailyDoubles(), control: 0, history: [], finalDone: false };
+  save();
+  showGame();
+};
+
+if (load()) {
+  const r = document.getElementById("resumeBtn");
+  r.classList.remove("hidden");
+  r.onclick = () => { state = load(); showGame(); };
+}
+
+/* ---------------- board + scores ---------------- */
+function showGame() {
+  document.getElementById("setup").classList.add("hidden");
+  document.getElementById("game").classList.remove("hidden");
+  renderBoard();
+  renderScores();
+}
+
+function renderBoard() {
+  const board = document.getElementById("board");
+  board.innerHTML = "";
+  CATEGORIES.forEach(c => {
+    const el = document.createElement("div");
+    el.className = "cat";
+    el.textContent = c.name;
+    board.appendChild(el);
+  });
+  VALUES.forEach((v, r) => {
+    CATEGORIES.forEach((_, c) => {
+      const key = `${c}-${r}`;
+      const t = document.createElement("button");
+      const used = state.used.includes(key);
+      t.className = "tile" + (used ? " used" : "");
+      t.textContent = `$${v}`;
+      if (!used) t.onclick = () => openClue(c, r);
+      board.appendChild(t);
+    });
+  });
+}
+
+function renderScores() {
+  const wrap = document.getElementById("scores");
+  wrap.innerHTML = "";
+  state.teams.forEach((t, i) => {
+    const card = document.createElement("div");
+    card.className = "score" + (state.control === i ? " control" : "");
+    card.innerHTML = `
+      <div>
+        <div class="name" title="Click to rename"></div>
+        <div class="ctl">${state.control === i ? "BOARD CONTROL" : "&nbsp;"}</div>
+      </div>
+      <div class="pts ${t.score < 0 ? "neg" : ""}">${fmt(t.score)}</div>
+      <div class="adj">
+        <button data-d="-200">−200</button><button data-d="-100">−100</button>
+        <button data-d="100">+100</button><button data-d="200">+200</button>
+      </div>`;
+    const nameEl = card.querySelector(".name");
+    nameEl.textContent = t.name;
+    nameEl.onclick = (e) => {
+      e.stopPropagation();
+      const n = prompt("Team name:", t.name);
+      if (n && n.trim()) { t.name = n.trim().slice(0, 28); save(); renderScores(); }
+    };
+    card.querySelectorAll(".adj button").forEach(b => b.onclick = (e) => {
+      e.stopPropagation();
+      addScore(i, Number(b.dataset.d));
+    });
+    card.onclick = () => { state.control = i; save(); renderScores(); };
+    wrap.appendChild(card);
+  });
+}
+
+function fmt(n) { return (n < 0 ? "−$" : "$") + Math.abs(n).toLocaleString(); }
+
+// All score changes go through here so Undo can reverse them.
+function addScore(team, delta) {
+  if (!delta) return;
+  state.teams[team].score += delta;
+  state.history.push({ team, delta });
+  save();
+  renderScores();
+}
+
+document.getElementById("undoBtn").onclick = () => {
+  const last = state.history.pop();
+  if (!last) return;
+  state.teams[last.team].score -= last.delta;
+  save();
+  renderScores();
+  refreshAwardButtons?.(last.team);
+};
+
+document.getElementById("newBtn").onclick = () => {
+  if (!confirm("Start a new game? This clears all scores.")) return;
+  localStorage.removeItem(STORAGE_KEY);
+  location.reload();
+};
+
+/* ---------------- clue overlay ---------------- */
+const overlay = document.getElementById("overlay");
+let timerId = null;
+let keyHandler = null;
+let refreshAwardButtons = null;
+
+function closeOverlay() {
+  clearInterval(timerId);
+  timerId = null;
+  keyHandler = null;
+  refreshAwardButtons = null;
+  overlay.classList.add("hidden");
+  overlay.innerHTML = "";
+  renderBoard();
+  renderScores();
+}
+
+function startTimer(el) {
+  clearInterval(timerId);
+  let left = TIMER_SECONDS;
+  el.classList.remove("out");
+  el.textContent = left;
+  timerId = setInterval(() => {
+    left--;
+    el.textContent = left > 0 ? left : "TIME";
+    if (left <= 0) { el.classList.add("out"); clearInterval(timerId); }
+  }, 1000);
+}
+
+function openClue(c, r) {
+  const key = `${c}-${r}`;
+  const clue = CATEGORIES[c].clues[r];
+  const value = VALUES[r];
+  const isDD = state.dd.includes(key);
+  state.used.push(key);
+  save();
+  overlay.classList.remove("hidden");
+  if (isDD) showDailyDouble(c, clue, value);
+  else showClue(c, clue, value, null);
+}
+
+// Daily Double: the team with board control (or any team the host picks) wagers first.
+function showDailyDouble(c, clue, value) {
+  const team = state.control;
+  const maxFor = (i) => Math.max(state.teams[i].score, 1000);
+  overlay.innerHTML = `
+    <div class="ov-head"><div>${CATEGORIES[c].name}</div><div class="val">DAILY DOUBLE</div></div>
+    <div class="ov-body"><div class="dd-banner">DAILY<br>DOUBLE!</div></div>
+    <div class="ov-foot">
+      <div class="row wager-box">
+        <select id="ddTeam">${state.teams.map((t, i) => `<option value="${i}" ${i === team ? "selected" : ""}>${esc(t.name)}</option>`).join("")}</select>
+        <span class="muted">wagers</span>
+        <input id="ddWager" type="number" min="5" step="100" value="${value}">
+        <span class="muted" id="ddMax"></span>
+        <button class="btn btn-gold" id="ddGo">Show clue</button>
+      </div>
+    </div>`;
+  const sel = overlay.querySelector("#ddTeam");
+  const maxEl = overlay.querySelector("#ddMax");
+  const updMax = () => maxEl.textContent = `(max ${fmt(maxFor(+sel.value))})`;
+  sel.onchange = updMax; updMax();
+  overlay.querySelector("#ddGo").onclick = () => {
+    const t = +sel.value;
+    const w = Math.min(Math.max(5, Math.round(+overlay.querySelector("#ddWager").value || 0)), maxFor(t));
+    showClue(c, clue, w, t);
+  };
+  keyHandler = (e) => { if (e.key === "Escape") closeOverlay(); };
+}
+
+// Regular clue (onlyTeam = null) or a Daily Double clue for one team at the wagered value.
+function showClue(c, clue, value, onlyTeam) {
+  const teams = onlyTeam === null ? state.teams.map((_, i) => i) : [onlyTeam];
+  overlay.innerHTML = `
+    <div class="ov-head"><div>${CATEGORIES[c].name}${onlyTeam !== null ? " · Daily Double" : ""}</div><div class="val">${fmt(value)}</div></div>
+    <div class="ov-body"><div>
+      <div class="clue-text">${esc(clue.q)}</div>
+      <div class="answer-text hidden" id="ans">${esc(clue.a)}</div>
+      <div class="answer-note hidden" id="note">${esc(clue.note || "")}</div>
+    </div></div>
+    <div class="ov-foot">
+      <div class="row">
+        <button class="btn btn-ghost" id="timerBtn">⏱ Timer</button>
+        <div class="timer" id="timer"></div>
+        <button class="btn btn-gold" id="revealBtn">Reveal answer</button>
+        <button class="btn btn-ghost" id="backBtn">Back to board</button>
+      </div>
+      <div class="row" id="awards"></div>
+    </div>`;
+
+  // Each team can be marked right (+value) or wrong (−value) once per clue.
+  // Undo passes the team it reversed, which unlocks that team's buttons again.
+  const marked = {};
+  const awards = overlay.querySelector("#awards");
+  refreshAwardButtons = (undoneTeam) => {
+    if (undoneTeam !== undefined) delete marked[undoneTeam];
+    awards.innerHTML = "";
+    teams.forEach(i => {
+      const box = document.createElement("div");
+      box.className = "award" + (marked[i] ? " done" : "");
+      box.innerHTML = `<span class="tn">${esc(state.teams[i].name)}</span>
+        <button class="btn-good">✓ +${value}</button>
+        <button class="btn-bad">✗ −${value}</button>`;
+      const [ok, no] = box.querySelectorAll("button");
+      ok.onclick = () => {
+        if (marked[i]) return;
+        marked[i] = true;
+        addScore(i, value);
+        state.control = i; save(); renderScores();
+        reveal();
+        refreshAwardButtons();
+      };
+      no.onclick = () => {
+        if (marked[i]) return;
+        marked[i] = true;
+        addScore(i, -value);
+        refreshAwardButtons();
+      };
+      awards.appendChild(box);
+    });
+  };
+  refreshAwardButtons();
+
+  const reveal = () => {
+    overlay.querySelector("#ans").classList.remove("hidden");
+    if (clue.note) overlay.querySelector("#note").classList.remove("hidden");
+  };
+  overlay.querySelector("#revealBtn").onclick = reveal;
+  overlay.querySelector("#backBtn").onclick = closeOverlay;
+  const timerEl = overlay.querySelector("#timer");
+  overlay.querySelector("#timerBtn").onclick = () => startTimer(timerEl);
+
+  keyHandler = (e) => {
+    if (e.key === "Escape") closeOverlay();
+    if (e.key === " ") { e.preventDefault(); reveal(); }
+    if (e.key.toLowerCase() === "t") startTimer(timerEl);
+  };
+}
+
+/* ---------------- final jeopardy ---------------- */
+document.getElementById("finalBtn").onclick = () => {
+  if (state.used.length < VALUES.length * CATEGORIES.length &&
+      !confirm("Some clues are still on the board. Go to Final Jeopardy anyway?")) return;
+  overlay.classList.remove("hidden");
+  // Step 1: category + wagers
+  overlay.innerHTML = `
+    <div class="ov-head"><div>Final Jeopardy</div><div class="val">FINAL</div></div>
+    <div class="ov-body"><div>
+      <div class="muted" style="font-size:22px;letter-spacing:2px">THE CATEGORY IS</div>
+      <div class="dd-banner" style="font-size:clamp(40px,6vw,96px)">${esc(FINAL.category)}</div>
+      <div class="muted" style="font-size:20px;margin-top:12px">Each team writes down a secret wager (0 up to its current score).</div>
+    </div></div>
+    <div class="ov-foot">
+      <div class="final-grid">
+        ${state.teams.map((t, i) => `
+          <div class="final-row">
+            <div class="fname">${esc(t.name)} <span class="muted">(${fmt(t.score)})</span></div>
+            <input type="number" min="0" step="100" data-i="${i}" placeholder="wager">
+            <span></span>
+          </div>`).join("")}
+      </div>
+      <div class="row"><button class="btn btn-gold" id="fClue">Lock wagers &amp; show clue</button>
+      <button class="btn btn-ghost" id="fBack">Back to board</button></div>
+    </div>`;
+  overlay.querySelector("#fBack").onclick = closeOverlay;
+  overlay.querySelector("#fClue").onclick = () => {
+    const wagers = [...overlay.querySelectorAll("input")].map(inp => {
+      const t = state.teams[+inp.dataset.i];
+      return Math.min(Math.max(0, Math.round(+inp.value || 0)), Math.max(0, t.score));
+    });
+    showFinalClue(wagers);
+  };
+  keyHandler = (e) => { if (e.key === "Escape") closeOverlay(); };
+};
+
+function showFinalClue(wagers) {
+  overlay.innerHTML = `
+    <div class="ov-head"><div>Final Jeopardy · ${esc(FINAL.category)}</div><div class="val">FINAL</div></div>
+    <div class="ov-body"><div>
+      <div class="clue-text">${esc(FINAL.q)}</div>
+      <div class="answer-text hidden" id="ans">${esc(FINAL.a)}</div>
+      <div class="answer-note hidden" id="note">${esc(FINAL.note)}</div>
+    </div></div>
+    <div class="ov-foot">
+      <div class="row">
+        <button class="btn btn-ghost" id="timerBtn">⏱ Timer</button>
+        <div class="timer" id="timer"></div>
+        <button class="btn btn-gold" id="revealBtn">Reveal answer</button>
+      </div>
+      <div class="final-grid">
+        ${state.teams.map((t, i) => `
+          <div class="final-row" data-i="${i}">
+            <div class="fname">${esc(t.name)}</div>
+            <div class="muted" style="text-align:center">wager ${fmt(wagers[i])}</div>
+            <div class="row"><button class="btn btn-good">✓ Right</button><button class="btn btn-bad">✗ Wrong</button></div>
+          </div>`).join("")}
+      </div>
+      <div class="row"><button class="btn btn-gold" id="fEnd">Show final standings</button></div>
+    </div>`;
+  const reveal = () => { overlay.querySelector("#ans").classList.remove("hidden"); overlay.querySelector("#note").classList.remove("hidden"); };
+  overlay.querySelector("#revealBtn").onclick = reveal;
+  const timerEl = overlay.querySelector("#timer");
+  overlay.querySelector("#timerBtn").onclick = () => startTimer(timerEl);
+  const rows = [...overlay.querySelectorAll(".final-row")];
+  const setDone = (row, isDone) => {
+    row.style.opacity = isDone ? .45 : 1;
+    row.querySelectorAll("button").forEach(b => b.disabled = isDone);
+  };
+  rows.forEach(row => {
+    const i = +row.dataset.i;
+    const [ok, no] = row.querySelectorAll("button");
+    const done = (delta) => { addScore(i, delta); setDone(row, true); };
+    ok.onclick = () => done(wagers[i]);
+    no.onclick = () => done(-wagers[i]);
+  });
+  // Undo re-opens the row for the team whose Final score change it reversed.
+  refreshAwardButtons = (undoneTeam) => {
+    const row = rows.find(r => +r.dataset.i === undoneTeam);
+    if (row) setDone(row, false);
+  };
+  overlay.querySelector("#fEnd").onclick = showWinner;
+  keyHandler = (e) => {
+    if (e.key === " ") { e.preventDefault(); reveal(); }
+    if (e.key.toLowerCase() === "t") startTimer(timerEl);
+  };
+}
+
+function showWinner() {
+  const ranked = state.teams.map(t => t).sort((a, b) => b.score - a.score);
+  const tie = ranked.length > 1 && ranked[0].score === ranked[1].score;
+  overlay.innerHTML = `
+    <div class="ov-head"><div>Final standings</div><div class="val"></div></div>
+    <div class="ov-body"><div>
+      <div class="winner">${tie ? "It's a tie!" : esc(ranked[0].name) + " wins!"}</div>
+      <div class="standings">${ranked.map(t => `${esc(t.name)}: <b>${fmt(t.score)}</b>`).join("<br>")}</div>
+    </div></div>
+    <div class="ov-foot"><div class="row"><button class="btn btn-ghost" id="wBack">Back to board</button></div></div>`;
+  overlay.querySelector("#wBack").onclick = closeOverlay;
+}
+
+/* ---------------- helpers ---------------- */
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+}
+document.addEventListener("keydown", (e) => {
+  if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
+  keyHandler?.(e);
+});
+</script>
+</body>
+</html>
